@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The sensor nodes are traditional IoT devices, collectiong data from a series of sensors, and transmitting it to a local edge node via MQTT. The IoT nodes are Raspberry Pi 3B+ devices running arm mbed OS 5 and managed by arm Pelion.
+The sensor nodes are traditional IoT devices, collectiong data from a series of sensors, and transmitting it to a local edge node via MQTT. The IoT nodes are Raspberry Pi 3B+ devices running Arm Mbed Linux OS and managed by Arm Pelion.
 
 ## Sensors
 
@@ -16,3 +16,4 @@ The sensor nodes are traditional IoT devices, collectiong data from a series of 
  - Port arduino sensor code to mbed 5
  - Deploy sensors
  - External enclosure?
+ - Power over Ethernet?
