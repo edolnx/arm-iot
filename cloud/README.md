@@ -6,12 +6,11 @@ The cloud node becomes the end of the road and central data store for the entire
 
 ## TODO:
 
- - Pick a data store and visulizer (InfluxDB+Grafana or ELK)
- - Ansible to deploy and configure data store and visualizer
- - Let's Encrypt cert for web server
+ - ??
 
 ## DONE:
 
  - Provision server
  - Assign DNS name (iot.unfinishedcode.net)
-
+ - Datastore is InfluxDB, Visualizer is Grafana
+ - Ansible for installation complete w/ LE cert

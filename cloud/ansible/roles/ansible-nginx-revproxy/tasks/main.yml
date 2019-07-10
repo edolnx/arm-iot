@@ -1,0 +1,171 @@
+---
+
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+  register:
+    nginxinstalled
+  tags:
+    - nginx-revproxy
+    - packages
+
+- name: Install ssl-cert
+  apt:
+    name: ssl-cert
+    state: present
+  tags:
+    - nginx-revproxy
+    - packages
+
+- name: Install python-passlib for Python 3 hosts
+  apt:
+    name:
+        - "python3-passlib"
+    state: present
+  tags:
+    - nginx-revproxy
+    - packages
+  when:
+    - ansible_python['version']['major'] == 3
+
+- name: Install python-passlib for Python 2 hosts
+  apt:
+    name:
+        - "python-passlib"
+    state: present
+  tags:
+    - nginx-revproxy
+    - packages
+  when:
+    - ansible_python['version']['major'] == 2
+
+- name: Add authentication
+  htpasswd:
+    path: "/etc/nginx/{{ item.key }}_htpasswd"
+    name: "{{ item.value.auth.login }}"
+    password: "{{ item.value.auth.password }}"
+  with_dict: "{{ nginx_revproxy_sites }}"
+  when:
+    - nginxinstalled is success
+    - item.value.auth is defined
+  tags:
+    - nginx-revproxy
+
+- name: Add Site Config
+  template:
+    src: reverseproxy.conf.j2
+    dest: /etc/nginx/sites-available/{{ item.key }}.conf
+    owner: root
+    group: root
+  with_dict: "{{ nginx_revproxy_sites }}"
+  register:
+    siteconfig
+  when:
+    - nginxinstalled is success
+    - item.value.ssl != True | default(True)
+    - item.value.letsencrypt != True | default(True)
+  tags:
+    - nginx-revproxy
+
+- name: Add Https Site Config
+  template:
+    src: reverseproxy_ssl.conf.j2
+    dest: /etc/nginx/sites-available/{{ item.key }}.conf
+    owner: root
+    group: root
+  with_dict: "{{ nginx_revproxy_sites }}"
+  register:
+    siteconfig
+  when:
+    - nginxinstalled is success
+    - item.value.ssl | default(False)
+    - item.value.letsencrypt != True | default(True)
+  tags:
+    - nginx-revproxy
+
+- name: Get Active Sites
+  command: ls -1 /etc/nginx/sites-enabled/
+  changed_when: "active.stdout_lines != nginx_revproxy_sites.keys()|sort()"
+  check_mode: no
+  register: active
+  tags:
+    - nginx-revproxy
+
+- name: De-activate Sites
+  file:
+    path: /etc/nginx/sites-enabled/{{ item }}
+    state: absent
+  with_items: "{{ active.stdout_lines }}"
+  notify: Reload Nginx
+  when:
+    - item not in nginx_revproxy_sites
+  tags:
+    - nginx-revproxy
+
+- name: Enable Site Config
+  file:
+    src: /etc/nginx/sites-available/{{ item.key }}.conf
+    dest: /etc/nginx/sites-enabled/{{ item.key }}
+    state: link
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: Reload Nginx
+  when:
+    - siteconfig is success
+    - item.value.letsencrypt != True | default(True)
+    - not ansible_check_mode
+  tags:
+    - nginx-revproxy
+
+- name: Create WebRoot sites
+  file:
+    dest: /var/www/{{ item.key }}/.well-known
+    mode: 0775
+    state: directory
+    owner: www-data
+    group: www-data
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: Reload Nginx
+  when:
+    - nginxinstalled is success
+  tags:
+    - nginx-revproxy
+
+- name: WebRoot Permissions Sites
+  file:
+    dest: /var/www/{{ item.key }}
+    mode: 0775
+    state: directory
+    owner: www-data
+    group: www-data
+    recurse: yes
+  with_dict: "{{ nginx_revproxy_sites }}"
+  notify: Reload Nginx
+  when:
+    - nginxinstalled is success
+  tags:
+    - nginx-revproxy
+
+- name: Get WebRoot Sites
+  command: ls -1 /var/www/
+  changed_when: "webroot.stdout_lines != nginx_revproxy_sites.keys()|sort()"
+  check_mode: no
+  register: webroot
+  tags:
+    - nginx-revproxy
+
+- name: Remove WebRoot Sites
+  file:
+    path: /var/www/{{ item }}/
+    state: absent
+  with_items: "{{ webroot.stdout_lines }}"
+  notify: Reload Nginx
+  when:
+    - item not in nginx_revproxy_sites
+  tags:
+    - nginx-revproxy
+
+- include_tasks: letsencrypt.yml
+  tags:
+    - lesencrypt
+    - nginx-revproxy

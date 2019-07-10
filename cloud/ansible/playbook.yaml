@@ -1,0 +1,59 @@
+---
+- name: IoT Project Cloud Server InfluxDB
+  hosts: iot.unfinishedcode.net
+  remote_user: root
+  roles:
+    - role: cloudalchemy.grafana
+      vars:
+        grafana_security:
+          admin_user: armiot
+          admin_password: armonarmonarm
+        grafana_address: 127.0.0.1
+    - role: ansible-nginx-revproxy
+      vars:
+        nginx_revproxy_sites:
+          default:
+            ssl: false
+            letsencrypt: false
+          iot.unfinishedcode.net:
+            domains:
+              - iot.unfinishedcode.net
+            upstreams:
+              - { backend_address: 127.0.0.1, backend_port: 3000 }
+            ssl: true
+            letsencrypt: true
+            letsencrypt_email: caperry@spherecube.host
+  tasks:
+    - name: Import InfluxDB GPG signing key
+      apt_key: url=https://repos.influxdata.com/influxdb.key state=present
+
+    - name: Add InfluxDB repository
+      apt_repository: repo='deb https://repos.influxdata.com/debian stretch stable' state=present
+
+    - name: Install InfluxDB packages
+      apt: name=influxdb state=present
+
+    - name: Listen only on loopback
+      replace:
+        dest=/etc/influxdb/influxdb.conf
+        regexp='^# bind-address = "127.0.0.1:8088"$'
+        replace='bind-address = \"127.0.0.1:8088\"'
+        backup=yes
+
+    - name: Start the InfluxDB service
+      service: name=influxdb state=restarted enabled=yes
+
+    - name: Pause for InfluxDB service
+      pause: seconds=3
+
+    - name: Create sample database
+      command: /usr/bin/influx -execute 'CREATE DATABASE sample_database'
+      ignore_errors: yes
+
+    - name: Load some test data into sample database
+      uri:
+        url: http://localhost:8086/write?db=sample_database
+        method: POST
+        body: "random_ints,host=server_{{ 10 | random }} value={{ 100 | random }}"
+        status_code: 204
+      with_sequence: start=1 end=10
